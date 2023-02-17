@@ -4,67 +4,80 @@ import (
 	"fmt"
 	"os"
 
-    "github.com/charmbracelet/bubbles/list"
-    "github.com/charmbracelet/lipgloss"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var doc = lipgloss.NewStyle().Margin(1, 2)
-
-type item struct {
-    title, desc string
-}
-
-func (i item) Title() string        { return i.title }
-func (i item) Description() string  { return i.title }
-func (i item) FilterValue() string  { return i.title }
-
 type model struct {
-    decks   list.Model
+    choices     []string
+    cursor      int
+    selected    map[int]struct{}
 }
 
-func getDecks() []list.Item {
-    return []list.Item {
-        item {title: "JavaScript", desc: "Standard Deck"},
-        item {title: "TypeScript", desc: "Standard Deck"},
-        item {title: "React", desc: "Standard Deck"},
+func initialModel() model {
+    return model {
+        choices:    []string {"Buy carrots", "Buy celery", "Buy kohlrabi"},
+        selected:   make(map[int]struct{}),
     }
 }
 
-func (m model) Init() tea.Cmd {
+func(m model) Init() tea.Cmd {
     return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func(m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {
     case tea.KeyMsg:
-        if msg.String() == "ctrl+c" || msg.String() == "q" {
+        switch msg.String() {
+        case "ctrl+c", "q":
             return m, tea.Quit
-        }
-    case tea.WindowSizeMsg:
-        h, v := doc.GetFrameSize()
-        m.decks.SetSize(msg.Width - h, msg.Height - v)
-    }
 
-    var cmd tea.Cmd
-    m.decks, cmd = m.decks.Update(msg)
-    return m, cmd
+        case "up", "k":
+            if m.cursor > 0 {
+                m.cursor--
+            }
+
+        case "down", "j":
+            if m.cursor < len(m.choices) - 1 {
+                m.cursor++
+            }
+
+        case "enter", " ":
+            _, ok := m.selected[m.cursor]
+            if ok {
+                delete(m.selected, m.cursor)
+            } else {
+                m.selected[m.cursor] = struct{}{}
+            }
+        }
+    }
+    return m, nil
 }
 
-func (m model) View() string {
-    return doc.Render(m.decks.View())
+func(m model) View() string {
+    s := "What should we buy at the market?\n\n"
+
+    for i, choice := range m.choices {
+        cursor := " "
+        if m.cursor == i {
+            cursor = ">"
+        }
+
+        checked := " "
+        if _, ok := m.selected[i]; ok {
+            checked = "x"
+        }
+
+        s += fmt.Sprintf("%s [%s] %s \n", cursor, checked, choice)
+    }
+
+    s += "\nPress q to quit.\n"
+    return s
 }
 
 func main() {
-    decks := getDecks()
-    m := model{decks: list.New(decks, list.NewDefaultDelegate(), 0, 0)}
-        m.decks.Title = "Decks"
-
-
-    p := tea.NewProgram(m, tea.WithAltScreen())
-
+    p := tea.NewProgram(initialModel())
     if _, err := p.Run(); err != nil {
-        fmt.Printf("Error: %v", err)
+        fmt.Printf("Alas, there's been an error: %v", err)
         os.Exit(1)
     }
 }
