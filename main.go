@@ -5,19 +5,30 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+    "github.com/charmbracelet/lipgloss"
+    "github.com/charmbracelet/bubbles/list"
 )
 
-type model struct {
-    choices     []string
-    cursor      int
-    selected    map[int]struct{}
+var docStyle = lipgloss.NewStyle().Margin(1, 2)
+
+type deck struct {
+    title, desc     string
 }
 
-func initialModel() model {
-    return model {
-        choices:    []string {"Buy carrots", "Buy celery", "Buy kohlrabi"},
-        selected:   make(map[int]struct{}),
+func(d deck) Title() string       { return d.title }
+func(d deck) Description() string { return d.desc }
+func(d deck) FilterValue() string { return d.title }
+
+func getDecks() []list.Item {
+    decks := []list.Item {
+        deck{title: "JavaScript", desc: "JS mock interview questions"},
+        deck{title: "Japanese", desc: "Japanese word deck"},
     }
+    return decks
+}
+
+type model struct {
+    list    list.Model
 }
 
 func(m model) Init() tea.Cmd {
@@ -27,57 +38,30 @@ func(m model) Init() tea.Cmd {
 func(m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
     switch msg := msg.(type) {
     case tea.KeyMsg:
-        switch msg.String() {
-        case "ctrl+c", "q":
+        if msg.String() == "ctrl+c" {
             return m, tea.Quit
-
-        case "up", "k":
-            if m.cursor > 0 {
-                m.cursor--
-            }
-
-        case "down", "j":
-            if m.cursor < len(m.choices) - 1 {
-                m.cursor++
-            }
-
-        case "enter", " ":
-            _, ok := m.selected[m.cursor]
-            if ok {
-                delete(m.selected, m.cursor)
-            } else {
-                m.selected[m.cursor] = struct{}{}
-            }
         }
+    case tea.WindowSizeMsg:
+        h, v := docStyle.GetFrameSize()
+        m.list.SetSize(msg.Width-h, msg.Height-v)
     }
-    return m, nil
+
+    var cmd tea.Cmd
+    m.list, cmd = m.list.Update(msg)
+    return m, cmd
 }
 
 func(m model) View() string {
-    s := "What should we buy at the market?\n\n"
-
-    for i, choice := range m.choices {
-        cursor := " "
-        if m.cursor == i {
-            cursor = ">"
-        }
-
-        checked := " "
-        if _, ok := m.selected[i]; ok {
-            checked = "x"
-        }
-
-        s += fmt.Sprintf("%s [%s] %s \n", cursor, checked, choice)
-    }
-
-    s += "\nPress q to quit.\n"
-    return s
+    return docStyle.Render(m.list.View())
 }
 
 func main() {
-    p := tea.NewProgram(initialModel())
+    decks := getDecks()
+    m := model{list: list.New(decks, list.NewDefaultDelegate(), 0, 0)}
+
+    p := tea.NewProgram(m, tea.WithAltScreen())
     if _, err := p.Run(); err != nil {
-        fmt.Printf("Alas, there's been an error: %v", err)
+        fmt.Printf("There's been an error, oopsie woopsie!\nerror: %v", err)
         os.Exit(1)
     }
 }
